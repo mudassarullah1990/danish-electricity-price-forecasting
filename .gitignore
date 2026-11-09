@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+build/
+dist/
+wheels/
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# macOS and editors
+.DS_Store
+.idea/
+.vscode/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Datasets
+data/
+datasets/
+*.csv
+*.parquet
+*.h5
+*.hdf5
+
+# Trained models
+models/
+*.cbm
+*.pkl
+*.pickle
+*.joblib
+*.onnx
+*.pth
+*.pt
+
+# Experiment outputs
+mlruns/
+mlartifacts/
+outputs/
+multirun/
+
+# Logs
+*.log
+
+# DVC local cache
+.dvc/cache/
+.dvc/tmp/
+.dvc/config.local
