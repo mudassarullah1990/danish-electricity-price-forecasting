@@ -1,3 +1,4 @@
+
 # Python
 __pycache__/
 *.py[cod]
@@ -30,15 +31,16 @@ env/
 !.env.example
 
 # Datasets
-data/
-datasets/
+# Ignore root data folders, but allow configs/data/opsd.yaml
+/data/
+/datasets/
 *.csv
 *.parquet
 *.h5
 *.hdf5
 
 # Trained models
-models/
+/models/
 *.cbm
 *.pkl
 *.pickle
@@ -48,6 +50,8 @@ models/
 *.pt
 
 # Experiment outputs
+mlflow.db
+mlflow.db-*
 mlruns/
 mlartifacts/
 outputs/

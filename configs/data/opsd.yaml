@@ -1,0 +1,5 @@
+source_url: https://data.open-power-system-data.org/time_series/2020-10-06/time_series_60min_singleindex.csv
+
+raw_path: data/raw/time_series_60min_singleindex.csv
+processed_path: data/processed/
+target_suffix: price_day_ahead
