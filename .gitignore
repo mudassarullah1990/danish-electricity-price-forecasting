@@ -1,5 +1,7 @@
 
+# ============================================================
 # Python
+# ============================================================
 __pycache__/
 *.py[cod]
 *.so
@@ -15,32 +17,49 @@ wheels/
 .coverage
 htmlcov/
 
+# ============================================================
 # Virtual environments
+# ============================================================
 .venv/
 venv/
 env/
 
+# ============================================================
 # macOS and editors
+# ============================================================
 .DS_Store
 .idea/
 .vscode/
 
+# ============================================================
 # Secrets
+# ============================================================
 .env
 .env.*
 !.env.example
 
+# ============================================================
 # Datasets
-# Ignore root data folders, but allow configs/data/opsd.yaml
-/data/
+# ============================================================
+# DVC manages the OPSD dataset.
+# DVC generates Git ignore rules for tracked data files.
+# Do not ignore the entire /data/ directory.
+# Do not add a global *.csv rule.
+
 /datasets/
-*.csv
 *.parquet
 *.h5
 *.hdf5
 
+# ============================================================
 # Trained models
-/models/
+# ============================================================
+# Model binaries are managed by DVC, not Git.
+# Allow Git to track model metadata files.
+
+/models/*
+!/models/*.dvc
+
 *.cbm
 *.pkl
 *.pickle
@@ -49,7 +68,9 @@ env/
 *.pth
 *.pt
 
-# Experiment outputs
+# ============================================================
+# MLflow experiment outputs
+# ============================================================
 mlflow.db
 mlflow.db-*
 mlruns/
@@ -57,10 +78,14 @@ mlartifacts/
 outputs/
 multirun/
 
+# ============================================================
 # Logs
+# ============================================================
 *.log
 
-# DVC local cache
+# ============================================================
+# DVC local cache and settings
+# ============================================================
 .dvc/cache/
 .dvc/tmp/
 .dvc/config.local
