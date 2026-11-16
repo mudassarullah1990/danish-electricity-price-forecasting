@@ -1,7 +1,9 @@
 """Training pipeline with Hydra, CatBoost, DVC, and MLflow tracking."""
 
+import shutil
 import subprocess
 from pathlib import Path
+from urllib.request import urlopen
 
 import mlflow
 import pandas as pd
@@ -38,36 +40,55 @@ def calculate_metrics(actual, predicted) -> dict[str, float]:
     }
 
 
-def download_data(project_root: Path, raw_path: str) -> Path:
-    """Download the DVC-tracked dataset if it is missing locally."""
+def download_data(project_root: Path, raw_path: str, source_url: str) -> Path:
+    """Restore missing data using DVC, with a public OPSD fallback."""
     data_path = project_root / raw_path
 
     if data_path.is_file():
         print(f"Dataset already available: {data_path}")
         return data_path
 
-    print("Dataset missing. Downloading with DVC...")
-
+    data_path.parent.mkdir(parents=True, exist_ok=True)
     dvc_file = data_path.with_name(data_path.name + ".dvc")
 
-    subprocess.run(
-        [
-            "dvc",
-            "pull",
-            str(dvc_file.relative_to(project_root)),
-            "-r",
-            "gdrive",
-        ],
-        cwd=project_root,
-        check=True,
-    )
+    print("Dataset missing. Attempting DVC retrieval...")
+
+    try:
+        subprocess.run(
+            [
+                "dvc",
+                "pull",
+                str(dvc_file.relative_to(project_root)),
+                "-r",
+                "gdrive",
+            ],
+            cwd=project_root,
+            check=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        print(f"DVC retrieval unavailable: {exc}")
+
+    if not data_path.is_file():
+        print("Downloading dataset from public OPSD source...")
+        temporary_path = data_path.with_name(data_path.name + ".part")
+
+        try:
+            with (
+                urlopen(source_url, timeout=60) as response,
+                temporary_path.open("wb") as destination,
+            ):
+                shutil.copyfileobj(response, destination)
+
+            temporary_path.replace(data_path)
+        finally:
+            temporary_path.unlink(missing_ok=True)
 
     if not data_path.is_file():
         raise FileNotFoundError(
-            f"DVC completed but the dataset was not found: {data_path}"
+            f"Dataset retrieval completed but file was not found: {data_path}"
         )
 
-    print(f"Dataset downloaded successfully: {data_path}")
+    print(f"Dataset available: {data_path}")
     return data_path
 
 
@@ -87,8 +108,12 @@ def main() -> None:
 
     git_commit = get_git_commit(project_root)
 
-    # Automatically retrieve the DVC dataset when it is missing.
-    data_path = download_data(project_root, cfg.data.raw_path)
+    # Retrieve the dataset through DVC or the public OPSD fallback.
+    data_path = download_data(
+        project_root,
+        cfg.data.raw_path,
+        cfg.data.source_url,
+    )
     data = load_data(data_path)
 
     models_dir = project_root / "outputs" / "models"
