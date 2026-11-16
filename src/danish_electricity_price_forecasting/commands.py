@@ -1,4 +1,4 @@
-"""Training pipeline with Hydra, CatBoost, and MLflow tracking."""
+"""Training pipeline with Hydra, CatBoost, DVC, and MLflow tracking."""
 
 import subprocess
 from pathlib import Path
@@ -38,6 +38,39 @@ def calculate_metrics(actual, predicted) -> dict[str, float]:
     }
 
 
+def download_data(project_root: Path, raw_path: str) -> Path:
+    """Download the DVC-tracked dataset if it is missing locally."""
+    data_path = project_root / raw_path
+
+    if data_path.is_file():
+        print(f"Dataset already available: {data_path}")
+        return data_path
+
+    print("Dataset missing. Downloading with DVC...")
+
+    dvc_file = data_path.with_name(data_path.name + ".dvc")
+
+    subprocess.run(
+        [
+            "dvc",
+            "pull",
+            str(dvc_file.relative_to(project_root)),
+            "-r",
+            "gdrive",
+        ],
+        cwd=project_root,
+        check=True,
+    )
+
+    if not data_path.is_file():
+        raise FileNotFoundError(
+            f"DVC completed but the dataset was not found: {data_path}"
+        )
+
+    print(f"Dataset downloaded successfully: {data_path}")
+    return data_path
+
+
 def main() -> None:
     """Train, evaluate, save, and track Danish electricity price models."""
     project_root = Path(__file__).resolve().parents[2]
@@ -53,7 +86,10 @@ def main() -> None:
     mlflow.set_experiment(cfg.mlflow.experiment_name)
 
     git_commit = get_git_commit(project_root)
-    data = load_data(project_root / cfg.data.raw_path)
+
+    # Automatically retrieve the DVC dataset when it is missing.
+    data_path = download_data(project_root, cfg.data.raw_path)
+    data = load_data(data_path)
 
     models_dir = project_root / "outputs" / "models"
     results_dir = project_root / "outputs" / "results"
@@ -149,12 +185,13 @@ def main() -> None:
             # Save the trained model.
             model_path = models_dir / f"{market}_catboost.cbm"
             model.save_model(str(model_path))
+
             mlflow.log_artifact(
                 str(model_path),
                 artifact_path="models",
             )
 
-            # Preserve the existing validation plots.
+            # Generate and save validation plots.
             plot_paths = create_evaluation_plots(
                 model=model,
                 validation=validation,

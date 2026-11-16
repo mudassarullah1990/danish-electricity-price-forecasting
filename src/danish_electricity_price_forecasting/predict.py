@@ -1,28 +1,70 @@
-"""Generate 24-hour day-ahead forecasts for Danish electricity markets."""
+"""Generate day-ahead forecasts using Click, Hydra, CatBoost, and DVC."""
 
-import argparse
+import subprocess
 from datetime import timedelta
 from pathlib import Path
 
+import click
 import numpy as np
 import pandas as pd
 from catboost import CatBoostRegressor
+from hydra import compose, initialize_config_dir
 
 from danish_electricity_price_forecasting.data import load_data
 from danish_electricity_price_forecasting.train import FEATURE_COLUMNS
 
-MARKETS = ("DK_1", "DK_2")
-ISSUE_HOUR_UTC = 12
-HORIZON_HOURS = 24
+
+def ensure_dvc_file(
+    project_root: Path,
+    file_path: Path,
+    remote: str,
+) -> Path:
+    """Download a missing dataset or model from its DVC remote."""
+    if file_path.is_file():
+        return file_path
+
+    dvc_file = file_path.with_name(file_path.name + ".dvc")
+
+    if not dvc_file.is_file():
+        raise FileNotFoundError(f"DVC tracking file not found: {dvc_file}")
+
+    print(f"Downloading missing file from DVC remote '{remote}'...")
+
+    subprocess.run(
+        [
+            "dvc",
+            "pull",
+            str(dvc_file.relative_to(project_root)),
+            "-r",
+            remote,
+        ],
+        cwd=project_root,
+        check=True,
+    )
+
+    if not file_path.is_file():
+        raise FileNotFoundError(
+            f"DVC download completed but file is missing: {file_path}"
+        )
+
+    print(f"File downloaded successfully: {file_path}")
+    return file_path
 
 
 def predict_day(forecast_date: str) -> pd.DataFrame:
-    """Predict all 24 UTC hours of the requested date."""
+    """Predict hourly electricity prices for the requested UTC date."""
     project_root = Path(__file__).resolve().parents[2]
+    config_dir = project_root / "configs"
 
-    data_path = project_root / "data/raw/time_series_60min_singleindex.csv"
-    models_dir = project_root / "outputs/models"
-    output_dir = project_root / "outputs/predictions"
+    with initialize_config_dir(
+        config_dir=str(config_dir),
+        version_base=None,
+    ):
+        cfg = compose(config_name="config")
+
+    data_path = project_root / cfg.data.raw_path
+    models_dir = project_root / "outputs" / "models"
+    output_dir = project_root / "outputs" / "predictions"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     requested_date = pd.Timestamp(forecast_date)
@@ -32,13 +74,24 @@ def predict_day(forecast_date: str) -> pd.DataFrame:
 
     requested_date = requested_date.tz_localize("UTC").normalize()
 
-    issue_time = requested_date - timedelta(days=1) + timedelta(hours=ISSUE_HOUR_UTC)
+    issue_time = (
+        requested_date
+        - timedelta(days=1)
+        + timedelta(hours=cfg.forecast.issue_hour_utc)
+    )
 
     forecast_hours = pd.date_range(
         start=requested_date,
-        periods=HORIZON_HOURS,
+        periods=cfg.forecast.horizon_hours,
         freq="h",
         tz="UTC",
+    )
+
+    # Retrieve the dataset through DVC if it is missing locally.
+    data_path = ensure_dvc_file(
+        project_root=project_root,
+        file_path=data_path,
+        remote="gdrive",
     )
 
     data = load_data(data_path)
@@ -46,14 +99,16 @@ def predict_day(forecast_date: str) -> pd.DataFrame:
 
     results = pd.DataFrame({"utc_timestamp": forecast_hours})
 
-    for market in MARKETS:
-        price_column = f"{market}_price_day_ahead"
+    for market in cfg.markets:
+        price_column = f"{market}_{cfg.data.target_suffix}"
         model_path = models_dir / f"{market}_catboost.cbm"
 
-        if not model_path.is_file():
-            raise FileNotFoundError(
-                f"Model not found: {model_path}. Run the training pipeline first."
-            )
+        # Retrieve the trained model through DVC if it is missing.
+        model_path = ensure_dvc_file(
+            project_root=project_root,
+            file_path=model_path,
+            remote="models",
+        )
 
         features = pd.DataFrame(
             {
@@ -106,17 +161,14 @@ def predict_day(forecast_date: str) -> pd.DataFrame:
     return results
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Generate 24-hour Danish electricity price forecasts."
-    )
-    parser.add_argument(
-        "date",
-        help="Forecast date in YYYY-MM-DD format",
-    )
-    args = parser.parse_args()
-
-    predict_day(args.date)
+@click.command()
+@click.argument(
+    "forecast_date",
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+)
+def main(forecast_date) -> None:
+    """Generate day-ahead electricity price forecasts."""
+    predict_day(forecast_date.strftime("%Y-%m-%d"))
 
 
 if __name__ == "__main__":

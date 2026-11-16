@@ -797,6 +797,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "catboost" },
+    { name = "click" },
     { name = "dvc", extra = ["gdrive"] },
     { name = "hydra-core" },
     { name = "matplotlib" },
@@ -816,6 +817,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "catboost", specifier = ">=1.2.10" },
+    { name = "click", specifier = ">=8.5.1" },
     { name = "dvc", extras = ["gdrive"], specifier = ">=3.67.1" },
     { name = "hydra-core", specifier = ">=1.3.8" },
     { name = "matplotlib", specifier = ">=3.11.2" },
