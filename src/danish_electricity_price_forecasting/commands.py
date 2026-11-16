@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 
 import mlflow
+import pandas as pd
 from hydra import compose, initialize_config_dir
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
@@ -32,54 +33,54 @@ def get_git_commit(project_root: Path) -> str:
 def calculate_metrics(actual, predicted) -> dict[str, float]:
     """Calculate regression error metrics."""
     return {
-        "mae": mean_absolute_error(actual, predicted),
-        "rmse": mean_squared_error(actual, predicted) ** 0.5,
+        "mae": float(mean_absolute_error(actual, predicted)),
+        "rmse": float(mean_squared_error(actual, predicted) ** 0.5),
     }
 
 
 def main() -> None:
-    """Train and track Danish electricity price forecasting models."""
+    """Train, evaluate, save, and track Danish electricity price models."""
     project_root = Path(__file__).resolve().parents[2]
     config_dir = project_root / "configs"
 
-    # Load Hydra configuration
     with initialize_config_dir(
         config_dir=str(config_dir),
         version_base=None,
     ):
         cfg = compose(config_name="config")
 
-    # Configure MLflow
     mlflow.set_tracking_uri(cfg.mlflow.tracking_uri)
     mlflow.set_experiment(cfg.mlflow.experiment_name)
 
-    # Get Git commit and load dataset
     git_commit = get_git_commit(project_root)
     data = load_data(project_root / cfg.data.raw_path)
+
+    models_dir = project_root / "outputs" / "models"
+    results_dir = project_root / "outputs" / "results"
+    models_dir.mkdir(parents=True, exist_ok=True)
+    results_dir.mkdir(parents=True, exist_ok=True)
+
+    test_results = []
 
     print("===== DANISH ELECTRICITY PRICE FORECASTING =====")
 
     for market in cfg.markets:
         print(f"\nProcessing market: {market}")
 
-        # Create features
         features = create_features(data, market)
 
-        # Chronological train/validation/test split
-        train, validation, _test = split_data(
+        train, validation, test = split_data(
             features,
             train_ratio=cfg.split.train_ratio,
             validation_ratio=cfg.split.validation_ratio,
         )
 
-        # Create separate MLflow run for each market
-        with mlflow.start_run(run_name=f"{market}-catboost"):
-            # Log experiment metadata
+        with mlflow.start_run(run_name=f"{market}-catboost-final"):
             mlflow.set_tag("git_commit", git_commit)
             mlflow.set_tag("market", market)
             mlflow.set_tag("model_type", cfg.model.name)
+            mlflow.set_tag("evaluation_stage", "final_test")
 
-            # Log model parameters
             mlflow.log_params(
                 {
                     "market": market,
@@ -94,7 +95,7 @@ def main() -> None:
                 }
             )
 
-            # Train CatBoost model
+            # Train using training data and validation-based early stopping.
             model = train_model(
                 train,
                 validation,
@@ -105,61 +106,109 @@ def main() -> None:
                 random_seed=cfg.model.random_seed,
             )
 
-            # Generate validation predictions
-            predictions = model.predict(validation[FEATURE_COLUMNS])
+            # Validation evaluation.
+            validation_predictions = model.predict(validation[FEATURE_COLUMNS])
 
-            # Calculate model performance
-            metrics = calculate_metrics(
+            validation_metrics = calculate_metrics(
                 validation["target_price"],
-                predictions,
+                validation_predictions,
             )
 
-            # Calculate previous-week baseline performance
-            baseline_metrics = calculate_metrics(
+            validation_baseline = calculate_metrics(
                 validation["target_price"],
                 validation["baseline_price"],
             )
 
-            # Log evaluation metrics
+            # Final evaluation on the untouched test set.
+            test_predictions = model.predict(test[FEATURE_COLUMNS])
+
+            test_metrics = calculate_metrics(
+                test["target_price"],
+                test_predictions,
+            )
+
+            test_baseline = calculate_metrics(
+                test["target_price"],
+                test["baseline_price"],
+            )
+
             mlflow.log_metrics(
                 {
-                    "validation_mae": metrics["mae"],
-                    "validation_rmse": metrics["rmse"],
-                    "baseline_mae": baseline_metrics["mae"],
-                    "baseline_rmse": baseline_metrics["rmse"],
+                    "validation_mae": validation_metrics["mae"],
+                    "validation_rmse": validation_metrics["rmse"],
+                    "baseline_mae": validation_baseline["mae"],
+                    "baseline_rmse": validation_baseline["rmse"],
+                    "test_mae": test_metrics["mae"],
+                    "test_rmse": test_metrics["rmse"],
+                    "test_baseline_mae": test_baseline["mae"],
+                    "test_baseline_rmse": test_baseline["rmse"],
                     "best_iteration": model.get_best_iteration(),
                 }
             )
 
-            # Generate three evaluation plots
+            # Save the trained model.
+            model_path = models_dir / f"{market}_catboost.cbm"
+            model.save_model(str(model_path))
+            mlflow.log_artifact(
+                str(model_path),
+                artifact_path="models",
+            )
+
+            # Preserve the existing validation plots.
             plot_paths = create_evaluation_plots(
                 model=model,
                 validation=validation,
-                predictions=predictions,
+                predictions=validation_predictions,
                 feature_columns=FEATURE_COLUMNS,
                 market=market,
                 output_dir=project_root / "outputs" / "plots",
             )
 
-            # Upload plots to MLflow
             for plot_path in plot_paths:
                 mlflow.log_artifact(
                     str(plot_path),
                     artifact_path="plots",
                 )
 
+            test_results.append(
+                {
+                    "market": market,
+                    "train_observations": len(train),
+                    "validation_observations": len(validation),
+                    "test_observations": len(test),
+                    "validation_mae": validation_metrics["mae"],
+                    "validation_rmse": validation_metrics["rmse"],
+                    "test_mae": test_metrics["mae"],
+                    "test_rmse": test_metrics["rmse"],
+                    "test_baseline_mae": test_baseline["mae"],
+                    "test_baseline_rmse": test_baseline["rmse"],
+                    "best_iteration": model.get_best_iteration(),
+                }
+            )
+
             print(f"\nMarket: {market}")
             print(f"Training observations: {len(train):,}")
             print(f"Validation observations: {len(validation):,}")
-            print(f"MAE: {metrics['mae']:.4f} EUR/MWh")
-            print(f"RMSE: {metrics['rmse']:.4f} EUR/MWh")
-            print(f"Baseline MAE: {baseline_metrics['mae']:.4f} EUR/MWh")
-            print(f"Baseline RMSE: {baseline_metrics['rmse']:.4f} EUR/MWh")
+            print(f"Test observations: {len(test):,}")
+            print(f"Validation MAE: {validation_metrics['mae']:.4f} EUR/MWh")
+            print(f"Validation RMSE: {validation_metrics['rmse']:.4f} EUR/MWh")
+            print(f"Test MAE: {test_metrics['mae']:.4f} EUR/MWh")
+            print(f"Test RMSE: {test_metrics['rmse']:.4f} EUR/MWh")
+            print(f"Test baseline MAE: {test_baseline['mae']:.4f} EUR/MWh")
+            print(f"Test baseline RMSE: {test_baseline['rmse']:.4f} EUR/MWh")
             print(f"Best iteration: {model.get_best_iteration()}")
-            print(f"Evaluation plots logged: {len(plot_paths)}")
+            print(f"Model saved: {model_path}")
             print("MLflow run logged successfully.")
 
-    print("\nTraining and MLflow tracking completed successfully!")
+    # Export final results for both Danish markets.
+    results = pd.DataFrame(test_results)
+    results_path = results_dir / "final_test_metrics.csv"
+    results.to_csv(results_path, index=False)
+
+    print("\n===== FINAL TEST RESULTS =====")
+    print(results.to_string(index=False))
+    print(f"\nResults saved: {results_path}")
+    print("Training and final evaluation completed successfully!")
 
 
 if __name__ == "__main__":
