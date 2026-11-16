@@ -125,7 +125,7 @@ danish-electricity-price-forecasting/
 | Continuous integration   | GitHub Actions         |
 | Version control          | Git and GitHub         |
 
-## 6. Installation
+## 6. Setup
 
 Clone the repository:
 
@@ -148,7 +148,7 @@ uv run dvc pull
 
 **Note:** Access to the configured Google Drive DVC remote and its authentication credentials is required. The raw data can alternatively be downloaded from the public OPSD source above.
 
-## 7. Training and Experiment Tracking
+## 7. Train and Experiment Tracking
 
 Start the MLflow tracking server in a separate terminal:
 
@@ -276,6 +276,19 @@ The project implements:
 - GitHub Actions for continuous integration
 
 The training pipeline records the Git commit identifier in MLflow to associate experiments with source code versions.
+
+### Automatic DVC Artifact Retrieval
+
+The project configures two DVC remotes:
+
+- `gdrive`: versioned OPSD dataset
+- `models`: trained CatBoost model files
+
+Training automatically attempts to restore the dataset through DVC when the raw CSV is missing. Prediction automatically attempts to restore missing dataset and model files.
+
+Both retrieval paths have been tested successfully, with restored files verified against the originals using SHA-256 checksums.
+
+**Access requirements:** Google Drive DVC downloads require appropriate access permissions and authentication. Credentials are not included in the repository. Users without access can obtain the raw dataset from the public OPSD source linked in Section 2; trained models require access to the model remote or local retraining.
 
 ## 13. Limitations and Future Improvements
 
