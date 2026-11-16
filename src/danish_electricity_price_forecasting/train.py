@@ -52,9 +52,10 @@ def split_data(
     validation = data[data["forecast_date"].isin(validation_dates)].copy()
     test = data[data["forecast_date"].isin(test_dates)].copy()
 
-    for subset in (train, validation, test):
-        subset.drop(columns="forecast_date", inplace=True)
-        subset.reset_index(drop=True, inplace=True)
+    # Remove temporary date column without deprecated inplace operations.
+    train = train.drop(columns="forecast_date").reset_index(drop=True)
+    validation = validation.drop(columns="forecast_date").reset_index(drop=True)
+    test = test.drop(columns="forecast_date").reset_index(drop=True)
 
     return train, validation, test
 

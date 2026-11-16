@@ -15,10 +15,10 @@ def create_features(df: pd.DataFrame, market: str) -> pd.DataFrame:
 
     # Calendar features known in advance.
     result["hour"] = timestamps.dt.hour
-    result["day_of_week"] = timestamps.dt.dayofweek
+    result["day_of_week"] = timestamps.dt.day_of_week
     result["month"] = timestamps.dt.month
-    result["day_of_year"] = timestamps.dt.dayofyear
-    result["is_weekend"] = (timestamps.dt.dayofweek >= 5).astype(int)
+    result["day_of_year"] = timestamps.dt.day_of_year
+    result["is_weekend"] = (timestamps.dt.day_of_week >= 5).astype(int)
 
     # Historical prices from previous days.
     # Minimum lag of 48 hours is a conservative day-ahead assumption.
