@@ -1,0 +1,5 @@
+outs:
+- md5: b39f1b4ccd2bbcb5d24d141e239a6148
+  size: 198288
+  hash: md5
+  path: DK_1_catboost.cbm

@@ -2,90 +2,167 @@
 # ============================================================
 # Python
 # ============================================================
+
 __pycache__/
 *.py[cod]
+*$py.class
 *.so
 .Python
+
+# Build and distribution
 build/
 dist/
-wheels/
+downloads/
 *.egg-info/
 .eggs/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-htmlcov/
+*.egg
+wheels/
+pip-wheel-metadata/
 
 # ============================================================
 # Virtual environments
 # ============================================================
+
 .venv/
 venv/
 env/
+ENV/
+.python-version
 
 # ============================================================
-# macOS and editors
+# Python testing and coverage
 # ============================================================
-.DS_Store
-.idea/
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+.hypothesis/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+test-results/
+
+# ============================================================
+# Jupyter Notebook
+# ============================================================
+
+.ipynb_checkpoints/
+
+# ============================================================
+# IDE and editor
+# ============================================================
+
 .vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
 
 # ============================================================
-# Secrets
+# Environment variables and secrets
 # ============================================================
+
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+client_secret*.json
+service-account*.json
+secrets/
 
 # ============================================================
-# Datasets
+# DVC
 # ============================================================
-# DVC manages the OPSD dataset.
-# DVC generates Git ignore rules for tracked data files.
-# Do not ignore the entire /data/ directory.
-# Do not add a global *.csv rule.
 
-/datasets/
-*.parquet
-*.h5
-*.hdf5
-
-# ============================================================
-# Trained models
-# ============================================================
-# Model binaries are managed by DVC, not Git.
-# Allow Git to track model metadata files.
-
-/models/*
-!/models/*.dvc
-
-*.cbm
-*.pkl
-*.pickle
-*.joblib
-*.onnx
-*.pth
-*.pt
-
-# ============================================================
-# MLflow experiment outputs
-# ============================================================
-mlflow.db
-mlflow.db-*
-mlruns/
-mlartifacts/
-outputs/
-multirun/
-
-# ============================================================
-# Logs
-# ============================================================
-*.log
-
-# ============================================================
-# DVC local cache and settings
-# ============================================================
+# Ignore local DVC cache and configuration.
+# Keep .dvc/config and .dvc tracking files in Git.
 .dvc/cache/
 .dvc/tmp/
 .dvc/config.local
+
+# ============================================================
+# Raw and processed datasets
+# ============================================================
+
+# Dataset binaries must be managed by DVC, not Git.
+data/raw/*
+data/processed/*
+
+# Allow DVC metadata and directory placeholders.
+!data/raw/*.dvc
+!data/processed/*.dvc
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# ============================================================
+# Model training outputs
+# ============================================================
+
+# Ignore generated outputs by default.
+outputs/*
+
+# Allow model directory and DVC tracking files.
+!outputs/models/
+outputs/models/*
+!outputs/models/*.dvc
+
+# ============================================================
+# CatBoost
+# ============================================================
+
+catboost_info/
+
+# ============================================================
+# MLflow
+# ============================================================
+
+mlruns/
+mlartifacts/
+mlflow.db
+mlflow.db-*
+*.sqlite
+*.sqlite3
+
+# ============================================================
+# Logs and temporary files
+# ============================================================
+
+*.log
+logs/
+tmp/
+temp/
+.cache/
+
+# ============================================================
+# Local backup and miscellaneous files
+# ============================================================
+
+*.bak
+*.backup
+*.tmp
+
+# ============================================================
+# IMPORTANT: Files that must remain version-controlled
+# ============================================================
+
+# pyproject.toml
+# uv.lock
+# README.md
+# .pre-commit-config.yaml
+# .github/workflows/ci.yml
+# configs/
+# src/
+# tests/
+# .dvc/config
+# *.dvc
