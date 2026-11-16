@@ -284,7 +284,11 @@ The project configures two DVC remotes:
 - `gdrive`: versioned OPSD dataset
 - `models`: trained CatBoost model files
 
-Training automatically attempts to restore the dataset through DVC when the raw CSV is missing. Prediction automatically attempts to restore missing dataset and model files.
+**Training:** If the raw dataset is missing, the training pipeline first attempts to restore it through DVC. If DVC retrieval fails, it automatically downloads the original dataset from the public OPSD source configured in `configs/data/opsd.yaml`.
+
+**Prediction:** The inference pipeline automatically attempts to restore missing datasets and trained CatBoost models through DVC. Unlike training, prediction does not currently implement the public OPSD fallback.
+
+**Authentication:** Google Drive DVC retrieval requires appropriate permissions and authentication. OAuth credentials are stored locally and are not committed to GitHub. Training can obtain the public OPSD dataset without Google Drive access, but downloading the pretrained models requires access to the model remote.
 
 Both retrieval paths have been tested successfully, with restored files verified against the originals using SHA-256 checksums.
 
